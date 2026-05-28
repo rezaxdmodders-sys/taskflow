@@ -6,7 +6,7 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "minimal-ui"],
+  "display_override": ["tabbed", "window-controls-overlay", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#0d1117",
   "theme_color": "#0d1117",
@@ -44,6 +44,31 @@
       "text": "text",
       "url": "url"
     }
+  },
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "file_handlers": [
+    {
+      "action": "/?file-open=true",
+      "name": "TaskFlow Task File",
+      "accept": {
+        "text/plain": [".txt"],
+        "application/json": [".task", ".json"]
+      },
+      "icons": [
+        { "src": "https://cdn-icons-png.flaticon.com/512/9068/9068672.png", "sizes": "512x512", "type": "image/png" }
+      ]
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+taskflow",
+      "url": "/?protocol=%s"
+    }
+  ],
+  "note_taking": {
+    "new_note_url": "/?action=add&source=os-note"
   },
   "widgets": [
     {
