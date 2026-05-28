@@ -6,6 +6,7 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#0d1117",
   "theme_color": "#0d1117",
@@ -34,5 +35,28 @@
       "url": "/?action=add",
       "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/9068/9068672.png", "sizes": "512x512" }]
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/?share=true",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "widgets": [
+    {
+      "name": "Temporal Hub Widget",
+      "short_name": "TaskFlow Widget",
+      "description": "Pantau sisa waktu alarm dan tugas mendesak langsung dari Home Screen.",
+      "tag": "taskflow-widget",
+      "template": "taskflow-widget-template",
+      "ms_ac_template": "widget.json",
+      "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/9068/9068672.png", "sizes": "512x512", "type": "image/png" }]
+    }
+  ],
+  "edge_side_panel": {
+    "preferred_width": 360
+  }
 }
