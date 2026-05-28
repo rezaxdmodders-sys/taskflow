@@ -1,0 +1,38 @@
+{
+  "id": "com.rezanr.taskflowpro",
+  "name": "TaskFlow Pro",
+  "short_name": "TaskFlow",
+  "description": "Enterprise Temporal Task Management Ecosystem with Low-Level Hardware Optimization.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "lang": "id",
+  "dir": "ltr",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/9068/9068672.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/9068/9068672.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Tambah Tugas Baru",
+      "short_name": "Tambah",
+      "description": "Langsung buka input tugas mendesak",
+      "url": "/?action=add",
+      "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/9068/9068672.png", "sizes": "512x512" }]
+    }
+  ]
+}

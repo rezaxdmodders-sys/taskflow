@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskFlow Pro — Temporal Enterprise Core V3.5</title>
+    <link rel="manifest" href="manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #060A13;
+            --bg-surface: rgba(17, 24, 39, 0.7);
+            --bg-elevated: #1F293D;
+            --bg-input: #111827;
+            --brand-primary: #6366F1;
+            --brand-primary-hover: #4F46E5;
+            --brand-gradient: linear-gradient(135deg, #6366F1, #10B981);
+            --color-success: #10B981;
+            --color-danger: #EF4444;
+            --color-star: #FBBF24;
+            --text-primary: #F8FAFC;
+            --text-secondary: #94A3B8;
+            --text-muted: #475569;
+            --border-subtle: rgba(255, 255, 255, 0.05);
+            --border-default: rgba(255, 255, 255, 0.09);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 18px;
+            --radius-xl: 24px;
+            --radius-full: 9999px;
+            --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+            --shadow-hover: 0 25px 50px -12px rgba(99, 102, 241, 0.15);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg-base); color: var(--text-primary); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+
+        /* Navbar Layout */
+        .navbar { position: sticky; top: 0; height: 65px; background: rgba(6, 10, 19, 0.75); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; padding: 0 24px; z-index: 100; }
+        .logo { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; cursor: pointer; }
+        .logo span { color: var(--brand-primary); background: var(--brand-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-actions { display: flex; align-items: center; gap: 12px; }
+        .nav-btn { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-md); font-size: 18px; transition: all 0.25s; }
+        .nav-btn:hover { background: rgba(255, 255, 255, 0.06); color: var(--text-primary); transform: translateY(-1px); }
+        .avatar { width: 34px; height: 34px; border-radius: var(--radius-full); background: var(--brand-gradient); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px; color: white; box-shadow: var(--shadow-sm); }
+
+        main { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 30px 20px; gap: 24px; }
+        .widgets-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; width: 100%; max-width: 720px; transition: all 0.4s; }
+        .widget-card { background: var(--bg-surface); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-sm); transition: all 0.3s; }
+        .widget-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); border-color: rgba(99, 102, 241, 0.3); }
+        .widget-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.75px; color: var(--text-secondary); }
+
+        /* Clock & Calc Setup */
+        .clock-display { font-family: monospace; font-size: 24px; font-weight: 700; letter-spacing: 0.5px; color: var(--text-primary); margin-bottom: 2px; }
+        .alarm-inputs { display: flex; gap: 6px; }
+        .input-time-picker { background: var(--bg-input); border: 1px solid var(--border-default); color: var(--text-primary); border-radius: var(--radius-sm); padding: 4px 6px; font-size: 12px; outline: none; flex: 1; }
+        .btn-set-alarm { background: var(--brand-primary); color: white; border: none; padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: var(--radius-sm); cursor: pointer; transition: background 0.2s; }
+        .btn-set-alarm:hover { background: var(--brand-primary-hover); }
+
+        /* Emergency Red Alert Banner & Pulse Animation */
+        .alarm-trigger-banner { background: linear-gradient(90deg, #EF4444, #B91C1C); border: 1px solid rgba(255,255,255,0.2); border-radius: var(--radius-md); padding: 12px 16px; width: 100%; max-width: 720px; display: none; justify-content: space-between; align-items: center; box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3); animation: slideInDown 0.3s ease; }
+        .btn-dismiss-alarm { background: white; color: #B91C1C; border: none; padding: 8px 16px; font-weight: 700; font-size: 12px; border-radius: var(--radius-sm); cursor: pointer; animation: pulseEffector 1.5s infinite; }
+        
+        @keyframes pulseEffector {
+            0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+
+        /* Smart Calc Display Component */
+        .calc-box { display: flex; flex-direction: column; gap: 6px; }
+        .calc-screen-wrapper { display: flex; gap: 4px; }
+        .calc-screen { flex: 1; background: var(--bg-input); border: 1px solid var(--border-subtle); padding: 6px; border-radius: var(--radius-sm); text-align: right; font-size: 13px; font-family: monospace; min-height: 30px; color: #10B981; }
+        .btn-insert-task { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10B981; padding: 0 8px; font-size: 11px; font-weight: 600; border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s; }
+        .btn-insert-task:hover { background: #10B981; color: white; }
+        .calc-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+        .calc-btn { background: var(--bg-elevated); border: none; color: var(--text-primary); padding: 5px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: background 0.15s; }
+        .calc-btn:hover { background: var(--brand-primary); }
+
+        /* Application Main Box Template */
+        .app-card { background: var(--bg-surface); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); width: 100%; max-width: 720px; padding: 32px; border-radius: var(--radius-xl); border: 1px solid var(--border-default); box-shadow: var(--shadow-lg); }
+        .app-header { margin-bottom: 24px; }
+        .app-header h2 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 26px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.5px; }
+        .meta-counter { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+        .progress-wrapper { margin-bottom: 28px; }
+        .progress-container { background: #151D30; height: 7px; border-radius: var(--radius-full); overflow: hidden; }
+        .progress-bar { height: 100%; width: 0%; background: var(--brand-gradient); transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* Input Controls Layout Framework */
+        .input-group { display: flex; gap: 10px; margin-bottom: 24px; align-items: stretch; }
+        .input-wrapper { flex: 1; position: relative; display: flex; align-items: center; }
+        .input-task { width: 100%; height: 48px; background-color: var(--bg-input); border: 1.5px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-primary); padding: 0 54px 0 16px; font-size: 14px; outline: none; transition: all 0.25s; }
+        .input-task:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); background-color: #0d1321; }
+        .btn-add { background: var(--text-primary); color: var(--bg-base); border: none; padding: 0 22px; font-size: 14px; font-weight: 600; border-radius: var(--radius-md); cursor: pointer; white-space: nowrap; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); display: flex; align-items: center; justify-content: center; }
+        .btn-add:active { transform: translateY(1px); }
+        .shortcut-badge { position: absolute; right: 14px; background: var(--bg-elevated); border: 1px solid var(--border-default); color: var(--text-secondary); font-size: 11px; font-weight: 600; padding: 4px 7px; border-radius: 6px; pointer-events: none; }
+
+        /* Filter Tab Elements */
+        .filter-tabs { display: flex; background: rgba(17, 24, 39, 0.6); border: 1px solid var(--border-subtle); padding: 4px; border-radius: var(--radius-full); margin-bottom: 24px; gap: 2px; }
+        .tab { flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: var(--radius-full); text-align: center; transition: all 0.25s; }
+        .tab.active { color: white; background: var(--brand-primary); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
+
+        /* List Renderer Components */
+        .todo-list { list-style: none; }
+        .todo-item { background: rgba(21, 29, 45, 0.4); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; position: relative; transition: all 0.25s; animation: slideInDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .todo-item:hover { transform: translateX(4px); background: rgba(21, 29, 45, 0.8); }
+        .todo-item.important { border-left: 4px solid var(--color-star); }
+        .todo-item.completed { opacity: 0.45; }
+        .todo-left { display: flex; align-items: center; gap: 14px; flex: 1; cursor: pointer; }
+        .checkbox-custom { width: 22px; height: 22px; border: 2px solid var(--text-secondary); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .todo-item.completed .checkbox-custom { background-color: var(--color-success); border-color: var(--color-success); }
+        .todo-item.completed .checkbox-custom::after { content: '✓'; color: #060A13; font-size: 12px; font-weight: 900; }
+        .todo-body-text { display: flex; flex-direction: column; gap: 5px; }
+        .todo-title { font-size: 15px; font-weight: 500; word-break: break-all; }
+        .todo-item.completed .todo-title { text-decoration: line-through; color: var(--text-secondary); }
+        
+        .badge-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .badge-dl, .badge-time { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-full); }
+        .badge-dl { background: rgba(245, 158, 11, 0.1); color: var(--color-star); }
+        .badge-time { background: rgba(255, 255, 255, 0.04); color: var(--text-secondary); }
+
+        .btn-kebab { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; opacity: 0; transition: all 0.2s; }
+        .todo-item:hover .btn-kebab, .btn-kebab.active-menu { opacity: 1; }
+        .btn-kebab:hover { background: rgba(255, 255, 255, 0.06); color: var(--text-primary); }
+
+        .dropdown-menu { position: absolute; top: 38px; right: 0; background-color: #1A2436; border: 1px solid var(--border-default); border-radius: var(--radius-md); width: 185px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); z-index: 50; display: none; padding: 4px; animation: menuGrow 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .dropdown-item { width: 100%; background: transparent; border: none; color: var(--text-primary); text-align: left; padding: 9px 12px; font-size: 13px; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
+        .dropdown-item:hover { background: rgba(99, 102, 241, 0.15); }
+        .dropdown-item.del-action { color: var(--color-danger); }
+        .dropdown-item.del-action:hover { background: rgba(239, 68, 68, 0.12); }
+
+        .inline-edit-input { background: var(--bg-input); border: 1px solid var(--brand-primary); color: var(--text-primary); padding: 4px 8px; font-size: 14px; border-radius: 6px; outline: none; width: 100%; }
+
+        /* ADVANCED CONTROL CENTER 3-TAB SPECIFICATION */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(4, 7, 13, 0.8); backdrop-filter: blur(8px); z-index: 500; display: none; align-items: center; justify-content: center; }
+        .settings-card { background: #111827; border: 1px solid var(--border-default); border-radius: var(--radius-xl); width: 92%; max-width: 560px; padding: 24px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; max-height: 85vh; }
+        .settings-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; }
+        
+        .settings-navigation { display: flex; gap: 4px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: var(--radius-md); margin-bottom: 20px; border: 1px solid var(--border-subtle); }
+        .settings-nav-tab { flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 8px; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 6px; transition: all 0.2s; }
+        .settings-nav-tab.active-tab { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-default); }
+        
+        .settings-content-wrapper { flex: 1; overflow-y: auto; padding-right: 4px; }
+        .settings-pane { display: none; }
+        .settings-pane.active-pane { display: block; }
+        
+        .settings-section { margin-bottom: 16px; }
+        .settings-section h4 { font-size: 11px; color: var(--brand-primary); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.75px; font-weight: 700; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
+        .setting-row span { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+        .setting-desc { font-size: 11px; color: var(--text-secondary); display: block; margin-top: -4px; margin-bottom: 8px; line-height: 1.4; }
+        
+        /* Toggle Switcher Styling */
+        .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #243149; transition: .25s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .25s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--brand-primary); }
+        input:checked + .slider:before { transform: translateX(18px); }
+
+        .btn-sec { background: #1F293D; color: var(--text-primary); border: 1px solid var(--border-default); padding: 8px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; cursor: pointer; }
+        .btn-sec:hover { background: rgba(255,255,255,0.05); }
+        .empty-state { text-align: center; padding: 48px 0; color: var(--text-secondary); font-size: 14px; display: block; }
+
+        /* Help Drawer Custom System */
+        .help-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 199; display: none; }
+        .help-drawer { position: fixed; top: 0; right: -380px; width: 380px; height: 100vh; background-color: #111827; border-left: 1px solid var(--border-default); box-shadow: -10px 0 30px rgba(0,0,0,0.5); z-index: 200; display: flex; flex-direction: column; transition: right 0.25s cubic-bezier(0.16, 1, 0.3, 1); padding: 24px; }
+        .help-drawer.open { right: 0; }
+        .help-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .accordion-item { border-bottom: 1px solid var(--border-subtle); margin-bottom: 8px; }
+        .accordion-trigger { width: 100%; background: transparent; border: none; color: var(--text-primary); text-align: left; padding: 12px 0; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; }
+        .accordion-content { color: var(--text-secondary); font-size: 13px; padding-bottom: 12px; line-height: 1.6; display: none; }
+
+        .snackbar { position: fixed; bottom: -80px; left: 50%; transform: translateX(-50%); background-color: #1E293B; border: 1px solid var(--border-default); padding: 14px 24px; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 24px; z-index: 300; transition: bottom 0.3s cubic-bezier(0.16, 1, 0.3, 1); font-size: 13px; font-weight: 500; }
+        .snackbar.show { bottom: 30px; }
+
+        @keyframes slideInDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes menuGrow { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+        footer { text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border-subtle); margin-top: auto; }
+
+        @media (max-width: 640px) {
+            main { padding: 20px 12px; } .widgets-grid { grid-template-columns: 1fr; }
+            .app-card { padding: 20px; border-radius: var(--radius-lg); } .input-group { flex-direction: column; gap: 8px; }
+            .btn-add { width: 100%; height: 46px; } .shortcut-badge { display: none; } .btn-kebab { opacity: 1; }
+            .help-drawer { width: 100vw; right: -100vw; bottom: 0; height: 75vh; top: auto; border-radius: var(--radius-xl) var(--radius-xl) 0 0; } .help-drawer.open { right: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo" onclick="window.location.reload()">Task<span>Flow Pro</span></div>
+        <div class="nav-actions">
+            <button class="nav-btn" onclick="openSettingsModal()" title="Control Center Setelan">⚙️</button>
+            <button class="nav-btn" onclick="toggleHelpDrawer()" title="Pusat Bantuan">?</button>
+            <div class="avatar" title="Reza Nur Rizky">R</div>
+        </div>
+    </nav>
+
+    <main>
+        <div class="alarm-trigger-banner" id="alarmAlertBanner">
+            <div style="display:flex; flex-direction:column; gap:2px;">
+                <span style="font-weight:700; font-size:14px; color:white;">⏰ Temporal Hub Engine: Alarm Pemicu Aktif!</span>
+                <span style="font-size:12px; color:rgba(255,255,255,0.8);">Audio Ramping Sensory Protection & Hardware Vibration Worker sedang berjalan...</span>
+            </div>
+            <button class="btn-dismiss-alarm" onclick="stopRampingAlarm()">Selesai / Matikan</button>
+        </div>
+
+        <div class="widgets-grid" id="widgetsContainer">
+            <div class="widget-card" id="widget-temporal">
+                <div class="widget-title">🕰️ Temporal Hub</div>
+                <div class="clock-display" id="digitalClock">00:00:00</div>
+                <div class="alarm-inputs">
+                    <input type="time" id="alarmTimeInput" class="input-time-picker">
+                    <button class="btn-set-alarm" onclick="setTemporalAlarm()">Set Alarm</button>
+                </div>
+                <div id="alarmStatusText" style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Tidak ada alarm aktif</div>
+            </div>
+
+            <div class="widget-card" id="widget-weather">
+                <div class="widget-title">🌤️ Weather Sync</div>
+                <div style="font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">29°C <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">Sokaraja</span></div>
+                <div style="font-size: 11px; color: var(--text-secondary);">Berawan • Optimasi Kegiatan Indoor</div>
+            </div>
+
+            <div class="widget-card" id="widget-calc">
+                <div class="widget-title">🧮 Smart Calculator</div>
+                <div class="calc-box">
+                    <div class="calc-screen-wrapper">
+                        <div class="calc-screen" id="calcDisplay">0</div>
+                        <button class="btn-insert-task" onclick="insertCalcToInput()" title="Masukkan hasil ke draf tugas">➔ In</button>
+                    </div>
+                    <div class="calc-buttons">
+                        <button class="calc-btn" onclick="pressCalc('7')">7</button>
+                        <button class="calc-btn" onclick="pressCalc('8')">8</button>
+                        <button class="calc-btn" onclick="pressCalc('9')">9</button>
+                        <button class="calc-btn" onclick="pressCalc('/')">/</button>
+                        <button class="calc-btn" onclick="pressCalc('4')">4</button>
+                        <button class="calc-btn" onclick="pressCalc('5')">5</button>
+                        <button class="calc-btn" onclick="pressCalc('6')">6</button>
+                        <button class="calc-btn" onclick="pressCalc('*')">*</button>
+                        <button class="calc-btn" onclick="pressCalc('1')">1</button>
+                        <button class="calc-btn" onclick="pressCalc('2')">2</button>
+                        <button class="calc-btn" onclick="pressCalc('3')">3</button>
+                        <button class="calc-btn" onclick="pressCalc('-')">-</button>
+                        <button class="calc-btn" onclick="clearCalc()">C</button>
+                        <button class="calc-btn" onclick="pressCalc('0')">0</button>
+                        <button class="calc-btn" style="background:var(--brand-primary)" onclick="evalCalc()">=</button>
+                        <button class="calc-btn" onclick="pressCalc('+')">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="widget-card" id="widget-health">
+                <div class="widget-title">💻 System Health</div>
+                <div style="font-size: 13px; font-weight: 500; margin-top: 2px;">
+                    RAM Alloc: <span id="ramUsageTracker" style="color:var(--color-success)">Membaca...</span>
+                </div>
+                <div style="font-size: 11px; color: var(--text-secondary);" id="healthInsightText">Engine sandbox optimized</div>
+            </div>
+        </div>
+
+        <div class="app-card" id="mainAppCard">
+            <div class="app-header">
+                <h2>Aktivitas Hari Ini</h2>
+                <div class="meta-counter" id="counterText">0 tugas aktif mendesak</div>
+            </div>
+
+            <div class="progress-wrapper">
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <input type="text" id="taskInput" class="input-task" placeholder="Tulis rencana tugas strategismu disini..." aria-label="Input tugas">
+                    <div class="shortcut-badge">⌘K</div>
+                </div>
+                <button class="btn-add" onclick="addTask()">Tambah Tugas</button>
+            </div>
+
+            <div class="filter-tabs">
+                <button class="tab active" onclick="switchFilter('all', this)">Semua</button>
+                <button class="tab" onclick="switchFilter('active', this)">Aktif</button>
+                <button class="tab" onclick="switchFilter('important', this)">⭐ Penting</button>
+                <button class="tab" onclick="switchFilter('completed', this)">✅ Selesai</button>
+            </div>
+
+            <ul id="taskList" class="todo-list"></ul>
+            <div id="emptyState" class="empty-state">
+                ✨ Hooray! Tugasmu habis. Yuk bangun fokus produktif baru!
+            </div>
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="settingsModal" onclick="closeSettingsModal()">
+        <div class="settings-card" onclick="event.stopPropagation()">
+            <div class="settings-header">
+                <h3 style="font-family:'Plus Jakarta Sans'">⚙️ Control Center (Setelan Logika)</h3>
+                <button class="nav-btn" onclick="closeSettingsModal()">✕</button>
+            </div>
+            
+            <div class="settings-navigation">
+                <button class="settings-nav-tab active-tab" onclick="switchSettingsTab('tab-conn', this)">🌐 Konektivitas</button>
+                <button class="settings-nav-tab" onclick="switchSettingsTab('tab-temporal', this)">🕰️ Temporal Hub</button>
+                <button class="settings-nav-tab" onclick="switchSettingsTab('tab-resource', this)">💾 Resource</button>
+            </div>
+
+            <div class="settings-content-wrapper">
+                <div class="settings-pane active-pane" id="tab-conn">
+                    <div class="settings-section">
+                        <h4>A. Notification Driver & Engine</h4>
+                        <div class="setting-row">
+                            <span>Kirim Notifikasi Uji Coba</span>
+                            <button class="btn-sec" onclick="triggerTestNotification()">Kirim Tester</button>
+                        </div>
+                        <span class="setting-desc">Mengirimkan sinyal tes enkapsulasi notifikasi pop-up OS 5 detik setelah diklik.</span>
+                        
+                        <div class="setting-row">
+                            <span>Screen Wake Lock Engine</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleWakeLock" onchange="toggleWakeLockDriver()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <span class="setting-desc">Mencegah layar HP/PC mati otomatis secara paksa saat alarm worker sedang berjalan aktif.</span>
+                    </div>
+                </div>
+
+                <div class="settings-pane" id="tab-temporal">
+                    <div class="settings-section">
+                        <h4>B. Temporal Aggressive Engine</h4>
+                        <div class="setting-row">
+                            <span>Alarm Priority Level</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleHardMode">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <span class="setting-desc">Mode Agresif: Mengaktifkan generator frekuensi audio tinggi secara berulang saat alarm terpicu.</span>
+                        
+                        <div class="setting-row">
+                            <span>Value Focus Mode Driver</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleFocusMode" onchange="applyFocusModeEngine()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <span class="setting-desc">Otomatis menyembunyikan widget non-esensial untuk mereduksi distraksi visual lu.</span>
+                    </div>
+                </div>
+
+                <div class="settings-pane" id="tab-resource">
+                    <div class="settings-section">
+                        <h4>C. Sandbox Performance Driver</h4>
+                        <div class="setting-row">
+                            <span>Auto-Cleanup Optimization</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleCleanup" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <span class="setting-desc">Otomatis membersihkan log kalkulator dan reference objek mati untuk menjaga batas RAM di bawah 10 MB.</span>
+
+                        <div class="setting-row">
+                            <span>Temporal Hub Widget View</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleTemporalWidget" checked onchange="toggleWidgetVisibility('widget-temporal', this)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: flex-end; margin-top: 14px; border-top:1px solid var(--border-subtle); padding-top:12px;">
+                <button class="btn-sec" onclick="closeSettingsModal()">Selesai</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="help-backdrop" id="helpBackdrop" onclick="toggleHelpDrawer()"></div>
+    <div class="help-drawer" id="helpDrawer">
+        <div class="help-header">
+            <h3 style="font-family:'Plus Jakarta Sans'">❓ Pusat Bantuan</h3>
+            <button class="nav-btn" onclick="toggleHelpDrawer()">✕</button>
+        </div>
+        <div class="accordion-item">
+            <button class="accordion-trigger" onclick="toggleAccordion(this)">Shortcut Keyboard <span>+</span></button>
+            <div class="accordion-content">
+                Gunakan <b>Sub-Kunci ⌘K</b> atau <b>Ctrl+K</b> untuk langsung fokus ke kolom input tugas dari mana saja.
+            </div>
+        </div>
+        <div class="accordion-item">
+            <button class="accordion-trigger" onclick="toggleAccordion(this)">Audio Ramping Engine <span>+</span></button>
+            <div class="accordion-content">
+                Alarm menggunakan Web Audio API Synthesizer internal. Suara dimulai dari frekuensi lembut dan perlahan menguat untuk proteksi pendengaran lu.
+            </div>
+        </div>
+    </div>
+
+    <div class="snackbar" id="appSnackbar">Tugas berhasil diperbarui.</div>
+    <footer>TaskFlow Pro Ecosystem v3.5 Enterprise • Powered by Living OS Thread Engine • 2026</footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
