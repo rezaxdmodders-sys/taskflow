@@ -1,6 +1,7 @@
 /**
- * TaskFlow Pro — Living OS Core V3.6 Engine
+ * TaskFlow Pro — Living OS Core V3.7 Engine
  * Main Thread, Hardware Interface, & Tab Controller
+ * Upgrade: Protocol Handlers, Background Sync Trigger, Audio Gallery & Dynamic Haptic Driver
  */
 
 // Global State Management
@@ -22,11 +23,24 @@ window.addEventListener('DOMContentLoaded', () => {
     renderTasks();
     setupGlobalShortcuts();
     initShareTargetHandler();
+    initProtocolAndFileHandlers();
     
     // PWA Service Worker Registration (Jalur Absolut Bebas Eror)
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js')
-            .then((reg) => console.log('[App] Service Worker terdaftar! Scope:', reg.scope))
+            .then((reg) => {
+                console.log('[App] Service Worker terdaftar! Scope:', reg.scope);
+                // Daftarkan Background Sync saat Service Worker siap
+                return navigator.serviceWorker.ready;
+            })
+            .then((reg) => {
+                if ('sync' in reg) {
+                    // Daftarkan tag sinkronisasi tugas untuk background ghost
+                    reg.sync.register('sync-tasks')
+                        .then(() => console.log('[App] Background Sync "sync-tasks" berhasil dikunci.'))
+                        .catch((err) => console.error('[App] Gagal mendaftarkan Background Sync:', err));
+                }
+            })
             .catch((err) => console.error('[App] Registrasi Service Worker gagal:', err));
     }
 
@@ -83,9 +97,16 @@ function triggerRampingAlarm() {
     const banner = document.getElementById('alarmAlertBanner');
     if (banner) banner.style.display = 'flex';
     
-    // Haptic Vibration Bridge: Getaran Intens Terbaca Native di Android
-    if ('vibrate' in navigator) {
-        navigator.vibrate([500, 110, 500, 110, 450]);
+    // Ambil intensitas getaran dari slider setelan (default ke 100% jika element tidak ada)
+    const vibeSlider = document.getElementById('vibrationIntensityInput');
+    const vibeIntensity = vibeSlider ? parseFloat(vibeSlider.value) : 1;
+    
+    // Haptic Vibration Bridge dengan kalkulasi intensitas dinamis
+    if ('vibrate' in navigator && vibeIntensity > 0) {
+        const p1 = Math.round(500 * vibeIntensity);
+        const p2 = Math.round(500 * vibeIntensity);
+        const p3 = Math.round(450 * vibeIntensity);
+        navigator.vibrate([p1, 110, p2, 110, p3]);
     }
 
     // PWA Persistent Notification Push Skenario
@@ -105,22 +126,39 @@ function triggerRampingAlarm() {
         });
     }
 
-    // Audio Ramping Synthesizer Engine (Anti-Memory Leak & Sensory Protection)
+    // Audio Ramping Synthesizer Engine dengan Audio Gallery Modulator
     if (audioCtx) {
         if (audioCtx.state === 'suspended') audioCtx.resume();
         
         const isHardMode = document.getElementById('toggleHardMode').checked;
-        let baseFreq = isHardMode ? 660 : 440; 
+        const audioSelect = document.getElementById('audioGallerySelect');
+        const selectedAudioType = audioSelect ? audioSelect.value : 'buzz'; // Default ke buzz
 
-        // Buat Node Audio Baru untuk Efek Linear Ramping
+        // Inisialisasi Audio Node Baru
         oscNode = audioCtx.createOscillator();
         gainNode = audioCtx.createGain();
 
-        oscNode.type = 'sine';
-        oscNode.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
-        oscNode.frequency.linearRampToValueAtTime(baseFreq + 440, audioCtx.currentTime + 10); // Frekuensi meninggi bertahap
+        // Audio Gallery Logic Engine (Modulasi Frekuensi & Gelombang)
+        if (selectedAudioType === 'bell') {
+            oscNode.type = 'sine';
+            let baseFreq = isHardMode ? 880 : 587.33; // Nada Zen Bell tinggi lembut (D5 atau A5)
+            oscNode.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+            // Efek bell meluruh perlahan (Exponential Decay simulasi)
+            oscNode.frequency.exponentialRampToValueAtTime(baseFreq / 2, audioCtx.currentTime + 8);
+        } else if (selectedAudioType === 'wave') {
+            oscNode.type = 'triangle'; // Gelombang segitiga yang lebih rileks menyerupai ombak
+            let baseFreq = isHardMode ? 220 : 110; 
+            oscNode.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+            oscNode.frequency.linearRampToValueAtTime(baseFreq + 50, audioCtx.currentTime + 8);
+        } else {
+            // Default: Mechanical Buzz / Sine standard v3.6
+            oscNode.type = 'sine';
+            let baseFreq = isHardMode ? 660 : 440; 
+            oscNode.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+            oscNode.frequency.linearRampToValueAtTime(baseFreq + 440, audioCtx.currentTime + 10);
+        }
 
-        // LOGIKA RAMPING VOLUME: Mulai dari senyap (0) naik halus ke volume penuh (0.8) dalam waktu 8 detik
+        // LOGIKA RAMPING VOLUME UTAMA: Proteksi sensorik kortisol dari senyap (0) naik halus ke (0.8) dalam 8 detik
         gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
         gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 8);
 
@@ -170,6 +208,23 @@ function pressCalc(value) {
     }
     display.innerText = currentCalcExpression;
 }
+
+// Shortcut keyboard untuk kalkulator agar pengalaman interaksi lebih fluid
+document.addEventListener('keydown', (e) => {
+    const activeModal = document.getElementById('settingsModal');
+    if (activeModal && activeModal.style.display === 'flex') {
+        const validKeys = '0123456789+-*/.';
+        if (validKeys.includes(e.key)) {
+            e.preventDefault();
+            pressCalc(e.key);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            evalCalc();
+        } else if (e.key === 'Escape') {
+            clearCalc();
+        }
+    }
+});
 
 function clearCalc() {
     currentCalcExpression = '0';
@@ -248,9 +303,9 @@ function renderTasks() {
     localStorage.setItem('taskflow_tasks', JSON.stringify(tasks));
 }
 
-function addTask() {
+function addTask(customText = null) {
     const input = document.getElementById('taskInput');
-    const title = input.value.trim();
+    const title = customText ? customText.trim() : input.value.trim();
     
     if (!title) {
         const wrapper = document.querySelector('.input-group');
@@ -277,7 +332,7 @@ function addTask() {
     }
 
     tasks.unshift(newTask);
-    input.value = '';
+    if (!customText) input.value = '';
     renderTasks();
     showSnackbar("Tugas baru sukses ditambahkan!");
 }
@@ -508,5 +563,62 @@ function initShareTargetHandler() {
             taskInput.focus();
             showSnackbar("Teks dari OS berhasil ditangkap ke draf!");
         }
+    }
+}
+
+// ==========================================
+// 6. DEEP OS INTEROPERABILITY DRIVER (LAUNCH QUEUE & PROTOCOLS)
+// ==========================================
+function initProtocolAndFileHandlers() {
+    // 1. Tangkap Parameter dari Kustom Protocol Handler (web+taskflow://)
+    const currentUrl = new URL(window.location.href);
+    if (currentUrl.searchParams.has('protocol')) {
+        const rawProtocolData = currentUrl.searchParams.get('protocol');
+        // Dekode link kustom, pisahkan skema web+taskflow:
+        const cleanContent = decodeURIComponent(rawProtocolData).replace('web+taskflow:', '').replace(/^\/\/+/g, '');
+        if (cleanContent.trim()) {
+            addTask(`[Link Protokol] ${cleanContent}`);
+            showSnackbar("Instruksi dari tautan protokol dieksekusi!");
+        }
+    }
+
+    // 2. Tangkap Berkas Eksplorer Internal via Launch Queue (Sesuai Syarat PWABuilder)
+    if ('launchQueue' in window) {
+        window.launchQueue.setConsumer((launchParams) => {
+            if (launchParams.files && launchParams.files.length > 0) {
+                const fileHandle = launchParams.files[0];
+                fileHandle.getFile().then((file) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const fileContent = e.target.result;
+                        // Deteksi file format JSON (.task) atau TXT biasa
+                        if (file.name.endsWith('.task') || file.name.endsWith('.json')) {
+                            try {
+                                const parsedJSON = JSON.parse(fileContent);
+                                if (Array.isArray(parsedJSON)) {
+                                    tasks = [...parsedJSON, ...tasks];
+                                } else if (parsedJSON.title) {
+                                    tasks.unshift({
+                                        id: 'task_' + Date.now(),
+                                        title: parsedJSON.title,
+                                        completed: false,
+                                        important: parsedJSON.important || false,
+                                        timestamp: 'Eksternal'
+                                    });
+                                }
+                                renderTasks();
+                                showSnackbar(`Sukses sinkron berkas ekosistem: ${file.name}`);
+                            } catch (err) {
+                                addTask(`[Berkas] ${fileContent.substring(0, 40)}`);
+                            }
+                        } else {
+                            // Cadangan jika berkas bertipe plain .txt biasa
+                            addTask(`[Catatan Eksplorer] ${fileContent.substring(0, 50)}`);
+                        }
+                    };
+                    reader.readAsText(file);
+                }).catch(err => console.error('[Launch Queue] Gagal membaca deskriptor file:', err));
+            }
+        });
     }
 }
