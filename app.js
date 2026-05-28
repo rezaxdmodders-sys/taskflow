@@ -24,7 +24,7 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // PWA Service Worker Registration
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js')
+        navigator.serviceWorker.register('/sw.js')
             .then((reg) => console.log('[App] Service Worker terdaftar! Scope:', reg.scope))
             .catch((err) => console.error('[App] Registrasi Service Worker gagal:', err));
     }
