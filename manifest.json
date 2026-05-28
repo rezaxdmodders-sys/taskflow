@@ -27,6 +27,22 @@
       "purpose": "maskable"
     }
   ],
+  "screenshots": [
+    {
+      "src": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1280",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "TaskFlow Pro Desktop Hub"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=720",
+      "sizes": "720x1280",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "TaskFlow Pro Mobile Focus"
+    }
+  ],
   "shortcuts": [
     {
       "name": "Tambah Tugas Baru",
@@ -55,30 +71,13 @@
       "accept": {
         "text/plain": [".txt"],
         "application/json": [".task", ".json"]
-      },
-      "icons": [
-        { "src": "https://cdn-icons-png.flaticon.com/512/9068/9068672.png", "sizes": "512x512", "type": "image/png" }
-      ]
+      }
     }
   ],
   "protocol_handlers": [
     {
       "protocol": "web+taskflow",
       "url": "/?protocol=%s"
-    }
-  ],
-  "note_taking": {
-    "new_note_url": "/?action=add&source=os-note"
-  },
-  "widgets": [
-    {
-      "name": "Temporal Hub Widget",
-      "short_name": "TaskFlow Widget",
-      "description": "Pantau sisa waktu alarm dan tugas mendesak langsung dari Home Screen.",
-      "tag": "taskflow-widget",
-      "template": "taskflow-widget-template",
-      "ms_ac_template": "widget.json",
-      "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/9068/9068672.png", "sizes": "512x512", "type": "image/png" }]
     }
   ],
   "edge_side_panel": {
