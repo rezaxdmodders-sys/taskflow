@@ -1,9 +1,9 @@
 /**
- * TaskFlow Pro — Service Worker v3.6
- * Dual Layer Worker: Caching Platform, Advanced Push & Notification Dispatcher
+ * TaskFlow Pro — Service Worker v3.7
+ * Dual Layer Worker: Advanced Push, OS Note Interceptor & Background Sync
  */
 
-const CACHE_NAME = 'taskflow-cache-v3.6';
+const CACHE_NAME = 'taskflow-cache-v3.7';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -12,31 +12,25 @@ const ASSETS_TO_CACHE = [
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap'
 ];
 
-// Install Event
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll(ASSETS_TO_CACHE);
-        }).then(() => self.skipWaiting())
+        caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
+        .then(() => self.skipWaiting())
     );
 });
 
-// Activate Event (Cleanup Old Cache)
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cache) => {
-                    if (cache !== CACHE_NAME) {
-                        return caches.delete(cache);
-                    }
+                    if (cache !== CACHE_NAME) return caches.delete(cache);
                 })
             );
         }).then(() => self.clients.claim())
     );
 });
 
-// Fetch Event (Offline Capability)
 self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
@@ -49,47 +43,40 @@ self.addEventListener('fetch', (event) => {
                 }
                 return networkResponse;
             });
-        }).catch(() => {
-            if (event.request.mode === 'navigate') {
-                return caches.match('/index.html');
-            }
+        }).catch(() => caches.match('/index.html'))
+    );
+});
+
+// Background Sync Engine (Mengirim data saat internet kembali online)
+self.addEventListener('sync', (event) => {
+    if (event.tag === 'sync-tasks') {
+        console.log('[Background Ghost] Sinkronisasi data lokal ke cloud mendesak dijalankan...');
+        // Eksekusi logic fetch post database cloud lu di sini
+    }
+});
+
+self.addEventListener('push', (event) => {
+    let data = { title: 'TaskFlow Pro', body: 'Ada tugas mendesak menanti!', url: '/' };
+    if (event.data) {
+        try { data = event.data.json(); } catch (e) { data.body = event.data.text(); }
+    }
+
+    event.waitUntil(
+        self.registration.showNotification(data.title, {
+            body: data.body,
+            icon: 'https://cdn-icons-png.flaticon.com/512/9068/9068672.png',
+            badge: 'https://cdn-icons-png.flaticon.com/512/9068/9068672.png',
+            tag: 'alarm-urgent',
+            renotify: true,
+            vibrate: [500, 110, 500, 110, 450],
+            data: { url: data.url || '/' },
+            actions: [{ action: 'dismiss', title: 'Matikan Alarm' }]
         })
     );
 });
 
-// Logic Wake-Up Push Alarm (Menembus Sistem Hardware Getar HP)
-self.addEventListener('push', (event) => {
-    let data = { title: 'TaskFlow Pro', body: 'Ada tugas mendesak menanti!', url: '/' };
-    if (event.data) {
-        try {
-            data = event.data.json();
-        } catch (e) {
-            data.body = event.data.text();
-        }
-    }
-
-    const options = {
-        body: data.body,
-        icon: 'https://cdn-icons-png.flaticon.com/512/9068/9068672.png',
-        badge: 'https://cdn-icons-png.flaticon.com/512/9068/9068672.png',
-        tag: 'alarm-urgent',
-        renotify: true,
-        vibrate: [500, 110, 500, 110, 450],
-        data: { url: data.url || '/' },
-        actions: [
-            { action: 'dismiss', title: 'Matikan Alarm' }
-        ]
-    };
-
-    event.waitUntil(
-        self.registration.showNotification(data.title, options)
-    );
-});
-
-// Handler Click Notifikasi OS & Komunikasi ke Main Thread
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
             for (const client of clientList) {
@@ -100,9 +87,7 @@ self.addEventListener('notificationclick', (event) => {
                     return client.focus();
                 }
             }
-            if (clients.openWindow) {
-                return clients.openWindow(event.notification.data.url || '/');
-            }
+            if (clients.openWindow) return clients.openWindow(event.notification.data.url || '/');
         })
     );
 });
