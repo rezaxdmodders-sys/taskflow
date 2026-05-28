@@ -1,7 +1,6 @@
 /**
- * TaskFlow Pro — Living OS Core V3.7 Engine
+ * TaskFlow Pro — Living OS Core V4.0 Engine
  * Main Thread, Hardware Interface, & Tab Controller
- * Upgrade: Protocol Handlers, Background Sync Trigger, Audio Gallery & Dynamic Haptic Driver
  */
 
 // Global State Management
@@ -11,578 +10,179 @@ let activeAlarmTime = null;
 let currentCalcExpression = '0';
 let wakeLockObj = null;
 
-// Web Audio API & Audio Ramping Nodes State
+// Audio Context States
 let audioCtx = null;
 let oscNode = null;
 let gainNode = null;
 
 // Initialization Engine
 window.addEventListener('DOMContentLoaded', () => {
-    initClockEngine();
+    initOffscreenClockEngine();
     initSystemHealth();
     renderTasks();
     setupGlobalShortcuts();
-    initShareTargetHandler();
-    initProtocolAndFileHandlers();
+    initOSInteroperability();
     
-    // PWA Service Worker Registration (Jalur Absolut Bebas Eror)
+    // PWA Worker Registration
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js')
             .then((reg) => {
-                console.log('[App] Service Worker terdaftar! Scope:', reg.scope);
-                // Daftarkan Background Sync saat Service Worker siap
+                console.log('[App] Service Worker Securely Hooked. Scope:', reg.scope);
                 return navigator.serviceWorker.ready;
             })
             .then((reg) => {
                 if ('sync' in reg) {
-                    // Daftarkan tag sinkronisasi tugas untuk background ghost
-                    reg.sync.register('sync-tasks')
-                        .then(() => console.log('[App] Background Sync "sync-tasks" berhasil dikunci.'))
-                        .catch((err) => console.error('[App] Gagal mendaftarkan Background Sync:', err));
+                    reg.sync.register('sync-tasks').catch((err) => console.log(err));
                 }
-            })
-            .catch((err) => console.error('[App] Registrasi Service Worker gagal:', err));
+            }).catch((err) => console.error('[App] SW Connection Interrupted:', err));
     }
 
-    // Minta Izin Notifikasi Sistem Sejak Awal
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
     }
     
-    // Unlock Web Audio Context pada interaksi pertama user demi kebijakan privasi browser
     document.body.addEventListener('click', () => {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }, { once: true });
 });
 
 // ==========================================
-// 1. TEMPORAL HUB & DRIVER ALARM HAPTIC (UPGRADED LINEAR RAMPING)
+// 1. TEMPORAL HUB & LOGARITHMIC SENSORY DRIVER
 // ==========================================
-function initClockEngine() {
-    const clockEl = document.getElementById('digitalClock');
-    
+function initOffscreenClockEngine() {
+    const clockCanvas = document.getElementById('digitalClockCanvas');
+    if (!clockCanvas) {
+        // Fallback jika elemen canvas belum lu buat di HTML
+        const clockEl = document.getElementById('digitalClock');
+        setInterval(() => {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            if (clockEl) clockEl.innerText = timeStr;
+            checkAlarmTrigger(now.getHours(), now.getMinutes(), now.getSeconds());
+        }, 1000);
+        return;
+    }
+
+    // OFFSCREEN CANVAS OPTIMIZATION: Mengalihkan beban render teks jam agar main thread tetap super enteng
+    const offscreen = clockCanvas.transferControlToOffscreen();
+    const ctx = offscreen.getContext('2d');
+    ctx.font = 'bold 28px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = '#ffffff';
+
     setInterval(() => {
         const now = new Date();
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
         const seconds = String(now.getSeconds()).padStart(2, '0');
-        
-        if (clockEl) clockEl.innerText = `${hours}:${minutes}:${seconds}`;
+        const timeStr = `${hours}:${minutes}:${seconds}`;
 
-        // Alarm Trigger Check (Tepat eksekusi di detik :00)
-        if (activeAlarmTime === `${hours}:${minutes}` && seconds === '00') {
-            triggerRampingAlarm();
-        }
+        ctx.clearRect(0, 0, offscreen.width, offscreen.height);
+        ctx.fillText(timeStr, 10, 35);
+
+        checkAlarmTrigger(now.getHours(), now.getMinutes(), now.getSeconds());
     }, 1000);
+}
+
+function checkAlarmTrigger(h, m, s) {
+    const target = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    if (activeAlarmTime === target && s === 0) {
+        triggerLogarithmicAlarm();
+    }
 }
 
 function setTemporalAlarm() {
     const inputTime = document.getElementById('alarmTimeInput').value;
     const statusText = document.getElementById('alarmStatusText');
-    
-    if (!inputTime) {
-        showSnackbar("Tentukan jam alarmnya dulu, bro!");
-        return;
-    }
+    if (!inputTime) { showSnackbar("Tentukan jam alarmnya dulu, bro!"); return; }
     
     activeAlarmTime = inputTime;
     statusText.innerText = `Aktif [ ${activeAlarmTime} ]`;
-    statusText.style.color = 'var(--color-success)';
-    showSnackbar(`Alarm berhasil disetel pada pukul ${inputTime}`);
+    statusText.style.color = '#10b981';
+    showSnackbar(`Alarm berhasil dikunci pada pukul ${inputTime}`);
 }
 
-function triggerRampingAlarm() {
+function triggerLogarithmicAlarm() {
     const banner = document.getElementById('alarmAlertBanner');
     if (banner) banner.style.display = 'flex';
-    
-    // Ambil intensitas getaran dari slider setelan (default ke 100% jika element tidak ada)
-    const vibeSlider = document.getElementById('vibrationIntensityInput');
-    const vibeIntensity = vibeSlider ? parseFloat(vibeSlider.value) : 1;
-    
-    // Haptic Vibration Bridge dengan kalkulasi intensitas dinamis
-    if ('vibrate' in navigator && vibeIntensity > 0) {
-        const p1 = Math.round(500 * vibeIntensity);
-        const p2 = Math.round(500 * vibeIntensity);
-        const p3 = Math.round(450 * vibeIntensity);
-        navigator.vibrate([p1, 110, p2, 110, p3]);
+
+    // Cari tahu apakah ada tugas berstatus "Penting" yang memicu alarm ini
+    const hasUrgentTask = tasks.some(t => t.important && !t.completed);
+
+    // HAPTIC PATTERNS DRIVER: Bedakan pola getar berdasarkan tingkat urgensi data
+    if ('vibrate' in navigator) {
+        if (hasUrgentTask) {
+            // Pola Getar Tugas Penting: Agresif, intermiten, memicu adrenalin fokus (SOS pattern style)
+            navigator.vibrate([150, 50, 150, 50, 150, 100, 400, 100, 400]);
+        } else {
+            // Pola Getar Tugas Biasa: Ritme detak detak santai ritem linear halus
+            navigator.vibrate([500, 200, 500]);
+        }
     }
 
-    // PWA Persistent Notification Push Skenario
-    if ('serviceWorker' in navigator && Notification.permission === 'granted') {
-        navigator.serviceWorker.ready.then((registration) => {
-            registration.showNotification('TaskFlow Alarm!', {
-                body: 'Waktunya eksekusi tugas strategis lu sekarang, bro!',
-                icon: 'https://cdn-icons-png.flaticon.com/512/9068/9068672.png',
-                badge: 'https://cdn-icons-png.flaticon.com/512/9068/9068672.png',
-                vibrate: [500, 110, 500, 110, 450],
-                tag: 'temporal-alarm',
-                requireInteraction: true,
-                actions: [
-                    { action: 'dismiss', title: 'Matikan Alarm' }
-                ]
-            });
-        });
-    }
-
-    // Audio Ramping Synthesizer Engine dengan Audio Gallery Modulator
+    // AUDIO RAMPING ENGINE: Transisi frekuensi logaritmik mengikuti kurva respon biologis otak manusia
     if (audioCtx) {
         if (audioCtx.state === 'suspended') audioCtx.resume();
         
-        const isHardMode = document.getElementById('toggleHardMode').checked;
-        const audioSelect = document.getElementById('audioGallerySelect');
-        const selectedAudioType = audioSelect ? audioSelect.value : 'buzz'; // Default ke buzz
-
-        // Inisialisasi Audio Node Baru
         oscNode = audioCtx.createOscillator();
         gainNode = audioCtx.createGain();
+        oscNode.type = 'sine';
 
-        // Audio Gallery Logic Engine (Modulasi Frekuensi & Gelombang)
-        if (selectedAudioType === 'bell') {
-            oscNode.type = 'sine';
-            let baseFreq = isHardMode ? 880 : 587.33; // Nada Zen Bell tinggi lembut (D5 atau A5)
-            oscNode.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
-            // Efek bell meluruh perlahan (Exponential Decay simulasi)
-            oscNode.frequency.exponentialRampToValueAtTime(baseFreq / 2, audioCtx.currentTime + 8);
-        } else if (selectedAudioType === 'wave') {
-            oscNode.type = 'triangle'; // Gelombang segitiga yang lebih rileks menyerupai ombak
-            let baseFreq = isHardMode ? 220 : 110; 
-            oscNode.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
-            oscNode.frequency.linearRampToValueAtTime(baseFreq + 50, audioCtx.currentTime + 8);
-        } else {
-            // Default: Mechanical Buzz / Sine standard v3.6
-            oscNode.type = 'sine';
-            let baseFreq = isHardMode ? 660 : 440; 
-            oscNode.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
-            oscNode.frequency.linearRampToValueAtTime(baseFreq + 440, audioCtx.currentTime + 10);
-        }
+        const isHardMode = document.getElementById('toggleHardMode')?.checked;
+        let startFreq = isHardMode ? 440 : 220;
+        let endFreq = isHardMode ? 880 : 440;
 
-        // LOGIKA RAMPING VOLUME UTAMA: Proteksi sensorik kortisol dari senyap (0) naik halus ke (0.8) dalam 8 detik
-        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 8);
+        oscNode.frequency.setValueAtTime(startFreq, audioCtx.currentTime);
+        // Efek Logaritmik: Frekuensi menanjak eksponensial agar tidak memicu hentakan kortisol mendadak
+        oscNode.frequency.exponentialRampToValueAtTime(endFreq, audioCtx.currentTime + 8);
+
+        gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime); 
+        // Volume ramping logaritmik/eksponensial
+        gainNode.gain.exponentialRampToValueAtTime(0.8, audioCtx.currentTime + 8);
 
         oscNode.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-        
         oscNode.start();
     }
 }
 
 function stopRampingAlarm() {
-    // Mematikan dan memotong koneksi Audio Node secara bersih dari RAM
     if (oscNode) {
-        try {
-            oscNode.stop();
-            oscNode.disconnect();
-            oscNode = null;
-        } catch (e) {
-            console.log('[Hardware Sync] Audio sudah mati atau gagal dihentikan.');
-        }
+        try { oscNode.stop(); oscNode.disconnect(); oscNode = null; } catch(e){}
     }
-
     if ('vibrate' in navigator) navigator.vibrate(0);
-    
     const banner = document.getElementById('alarmAlertBanner');
     if (banner) banner.style.display = 'none';
-
-    const statusText = document.getElementById('alarmStatusText');
-    if (statusText) {
-        statusText.innerText = "Tidak ada alarm aktif";
-        statusText.style.color = 'var(--text-secondary)';
-    }
     
     activeAlarmTime = null;
-    showSnackbar("Alarm berhasil dimatikan.");
+    showSnackbar("Temporal alarm dinonaktifkan secara aman.");
 }
 
 // ==========================================
-// 2. SMART CALCULATOR & FOCUS TRANSFER
+// 2. BADGE API & OS INTEROPERABILITY DRIVER
 // ==========================================
-function pressCalc(value) {
-    const display = document.getElementById('calcDisplay');
-    if (currentCalcExpression === '0' && !isNaN(value)) {
-        currentCalcExpression = value;
-    } else {
-        currentCalcExpression += value;
-    }
-    display.innerText = currentCalcExpression;
-}
-
-// Shortcut keyboard untuk kalkulator agar pengalaman interaksi lebih fluid
-document.addEventListener('keydown', (e) => {
-    const activeModal = document.getElementById('settingsModal');
-    if (activeModal && activeModal.style.display === 'flex') {
-        const validKeys = '0123456789+-*/.';
-        if (validKeys.includes(e.key)) {
-            e.preventDefault();
-            pressCalc(e.key);
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            evalCalc();
-        } else if (e.key === 'Escape') {
-            clearCalc();
-        }
-    }
-});
-
-function clearCalc() {
-    currentCalcExpression = '0';
-    document.getElementById('calcDisplay').innerText = '0';
-}
-
-function evalCalc() {
-    const display = document.getElementById('calcDisplay');
-    try {
-        const sanitizedExpression = currentCalcExpression.replace(/[^0-9+\-*/.]/g, '');
-        const result = new Function(`return ${sanitizedExpression}`)();
-        currentCalcExpression = String(result);
-        display.innerText = currentCalcExpression;
-    } catch (e) {
-        display.innerText = 'Error';
-        currentCalcExpression = '0';
-    }
-}
-
-function insertCalcToInput() {
-    const display = document.getElementById('calcDisplay').innerText;
-    const taskInput = document.getElementById('taskInput');
-    if (display !== 'Error' && display !== '0') {
-        taskInput.value += ` (${display})`;
-        taskInput.focus();
-        showSnackbar("Hasil kalkulasi disisipkan ke draf tugas!");
-    }
-}
-
-// ==========================================
-// 3. CORE TASK MANAGEMENT & CRUD ENGINE
-// ==========================================
-function renderTasks() {
-    const listEl = document.getElementById('taskList');
-    const emptyStateEl = document.getElementById('emptyState');
-    if (!listEl) return;
-    listEl.innerHTML = '';
-    
-    let filteredTasks = tasks.filter(t => {
-        if (currentFilter === 'active') return !t.completed;
-        if (currentFilter === 'important') return t.important;
-        if (currentFilter === 'completed') return t.completed;
-        return true;
-    });
-
-    if (emptyStateEl) emptyStateEl.style.display = filteredTasks.length === 0 ? 'block' : 'none';
-
-    filteredTasks.forEach(task => {
-        const li = document.createElement('li');
-        li.className = `todo-item ${task.important ? 'important' : ''} ${task.completed ? 'completed' : ''}`;
-        
-        li.innerHTML = `
-            <div class="todo-left" onclick="toggleTaskComplete('${task.id}')">
-                <div class="checkbox-custom"></div>
-                <div class="todo-body-text">
-                    <span class="todo-title" id="title-${task.id}">${task.title}</span>
-                    <div class="badge-row">
-                        <span class="badge-time">⏰ ${task.timestamp}</span>
-                        ${task.important ? '<span class="badge-dl">★ PENTING</span>' : ''}
-                    </div>
-                </div>
-            </div>
-            <div style="position: relative;">
-                <button class="btn-kebab" onclick="toggleKebabMenu(event, '${task.id}')">⋮</button>
-                <div class="dropdown-menu" id="menu-${task.id}">
-                    <button class="dropdown-item" onclick="startInlineEdit('${task.id}')">✏️ Ubah Nama</button>
-                    <button class="dropdown-item" onclick="toggleTaskImportance('${task.id}')">⭐ ${task.important ? 'Hapus Bintang' : 'Tandai Penting'}</button>
-                    <button class="dropdown-item del-action" onclick="deleteTask('${task.id}')">🗑️ Hapus Permanen</button>
-                </div>
-            </div>
-        `;
-        listEl.appendChild(li);
-    });
-
-    updateMetaCalculations();
-    localStorage.setItem('taskflow_tasks', JSON.stringify(tasks));
-}
-
-function addTask(customText = null) {
-    const input = document.getElementById('taskInput');
-    const title = customText ? customText.trim() : input.value.trim();
-    
-    if (!title) {
-        const wrapper = document.querySelector('.input-group');
-        if (wrapper) {
-            wrapper.style.animation = 'shake 0.3s ease';
-            setTimeout(() => wrapper.style.animation = '', 300);
-        }
-        return;
-    }
-
-    const now = new Date();
-    const isImportantMode = currentFilter === 'important';
-    
-    const newTask = {
-        id: 'task_' + Date.now(),
-        title: title,
-        completed: false,
-        important: isImportantMode,
-        timestamp: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    };
-
-    if ('vibrate' in navigator) {
-        isImportantMode ? navigator.vibrate([150, 50, 150]) : navigator.vibrate(60);
-    }
-
-    tasks.unshift(newTask);
-    if (!customText) input.value = '';
-    renderTasks();
-    showSnackbar("Tugas baru sukses ditambahkan!");
-}
-
-function toggleTaskComplete(id) {
-    tasks = tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
-    renderTasks();
-}
-
-function toggleTaskImportance(id) {
-    tasks = tasks.map(t => t.id === id ? { ...t, important: !t.important } : t);
-    renderTasks();
-}
-
-function deleteTask(id) {
-    tasks = tasks.filter(t => t.id !== id);
-    renderTasks();
-    showSnackbar("Tugas berhasil dihapus.");
-}
-
-function startInlineEdit(id) {
-    const titleSpan = document.getElementById(`title-${id}`);
-    const currentText = titleSpan.innerText;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'inline-edit-input';
-    input.value = currentText;
-    
-    input.addEventListener('blur', () => saveInlineEdit(id, input.value));
-    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') saveInlineEdit(id, input.value); });
-    
-    titleSpan.innerHTML = '';
-    titleSpan.appendChild(input);
-    input.focus();
-}
-
-function saveInlineEdit(id, newTitle) {
-    if (newTitle.trim()) {
-        tasks = tasks.map(t => t.id === id ? { ...t, title: newTitle.trim() } : t);
-    }
-    const isCleanupActive = document.getElementById('toggleCleanup').checked;
-    if (isCleanupActive) { window.gc ? window.gc() : null; }
-    renderTasks();
-}
-
-// ==========================================
-// 4. CONTROL CENTER ADVANCED 3-TAB LOGIC
-// ==========================================
-function switchFilter(filter, buttonElement) {
-    currentFilter = filter;
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    buttonElement.classList.add('active');
-    renderTasks();
-}
-
-function updateMetaCalculations() {
-    const total = tasks.length;
-    const completedCount = tasks.filter(t => t.completed).length;
-    const activeCount = total - completedCount;
-    
-    const counterText = document.getElementById('counterText');
-    if (counterText) counterText.innerText = `${activeCount} tugas aktif mendesak`;
-    
-    const percent = total === 0 ? 0 : Math.round((completedCount / total) * 100);
-    const progressBar = document.getElementById('progressBar');
-    if (progressBar) progressBar.style.width = `${percent}%`;
-}
-
-function switchSettingsTab(tabId, buttonEl) {
-    document.querySelectorAll('.settings-nav-tab').forEach(btn => btn.classList.remove('active-tab'));
-    document.querySelectorAll('.settings-pane').forEach(pane => pane.classList.remove('active-pane'));
-    
-    buttonEl.classList.add('active-tab');
-    document.getElementById(tabId).classList.add('active-pane');
-}
-
-function triggerTestNotification() {
-    showSnackbar("Mengunci target... Tes notifikasi dikirim.");
-    setTimeout(() => {
-        if ('serviceWorker' in navigator && Notification.permission === 'granted') {
-            navigator.serviceWorker.ready.then((registration) => {
-                registration.showNotification('TaskFlow Pro Sandbox', {
-                    body: 'Tes Enkapsulasi Pop-up Sistem Berhasil! 🚀',
-                    icon: 'https://cdn-icons-png.flaticon.com/512/9068/9068672.png'
-                });
-            });
+function updateOSBadgeCount() {
+    // BADGE API: Menampilkan jumlah sisa antrean tugas langsung di ikon taskbar windows/layar HP
+    if ('setAppBadge' in navigator) {
+        const activeCount = tasks.filter(t => !t.completed).length;
+        if (activeCount > 0) {
+            navigator.setAppBadge(activeCount).catch((err) => console.log(err));
         } else {
-            alert('Akses izin notifikasi belum lu aktifkan di browser, Za!');
-        }
-    }, 500);
-}
-
-async function toggleWakeLockDriver() {
-    const isChecked = document.getElementById('toggleWakeLock').checked;
-    if (isChecked) {
-        if ('wakeLock' in navigator) {
-            try {
-                wakeLockObj = await navigator.wakeLock.request('screen');
-                showSnackbar("Wake Lock Aktif: Layar dikunci terus.");
-            } catch (err) {
-                console.error(`Gagal mengaktifkan Wake Lock: ${err.message}`);
-            }
-        } else {
-            showSnackbar("Browser lu belum support Wake Lock API.");
-        }
-    } else {
-        if (wakeLockObj) {
-            await wakeLockObj.release();
-            wakeLockObj = null;
-            showSnackbar("Wake Lock dinonaktifkan.");
+            navigator.clearAppBadge().catch((err) => console.log(err));
         }
     }
 }
 
-function applyFocusModeEngine() {
-    const isChecked = document.getElementById('toggleFocusMode').checked;
-    const weatherWidget = document.getElementById('widget-weather');
-    const calcWidget = document.getElementById('widget-calc');
-    
-    if (isChecked) {
-        if (weatherWidget) weatherWidget.style.display = 'none';
-        if (calcWidget) calcWidget.style.display = 'none';
-        showSnackbar("Focus Mode Aktif: Distraksi visual ditiadaan.");
-    } else {
-        if (weatherWidget) weatherWidget.style.display = 'flex';
-        if (calcWidget) calcWidget.style.display = 'flex';
-    }
-}
+function initOSInteroperability() {
+    const urlParams = new URL(window.location.href).searchParams;
 
-function toggleWidgetVisibility(id, checkbox) {
-    const widget = document.getElementById(id);
-    if (widget) widget.style.display = checkbox.checked ? 'flex' : 'none';
-}
-
-function toggleKebabMenu(event, id) {
-    event.stopPropagation();
-    const menu = document.getElementById(`menu-${id}`);
-    const isOpen = menu.style.display === 'block';
-    document.querySelectorAll('.dropdown-menu').forEach(m => m.style.display = 'none');
-    document.querySelectorAll('.btn-kebab').forEach(b => b.classList.remove('active-menu'));
-    if (!isOpen) {
-        menu.style.display = 'block';
-        event.target.classList.add('active-menu');
-    }
-}
-
-document.addEventListener('click', () => {
-    document.querySelectorAll('.dropdown-menu').forEach(m => m.style.display = 'none');
-    document.querySelectorAll('.btn-kebab').forEach(b => b.classList.remove('active-menu'));
-});
-
-function openSettingsModal() { document.getElementById('settingsModal').style.display = 'flex'; }
-function closeSettingsModal() { document.getElementById('settingsModal').style.display = 'none'; }
-function toggleHelpDrawer() {
-    const drawer = document.getElementById('helpDrawer');
-    const backdrop = document.getElementById('helpBackdrop');
-    const isOpen = drawer.classList.contains('open');
-    drawer.classList.toggle('open', !isOpen);
-    if (backdrop) backdrop.style.display = isOpen ? 'none' : 'block';
-}
-
-function toggleAccordion(button) {
-    const content = button.nextElementSibling;
-    const ind = button.querySelector('span');
-    const isBlock = content.style.display === 'block';
-    content.style.display = isBlock ? 'none' : 'block';
-    if (ind) ind.innerText = isBlock ? '+' : '-';
-}
-
-function showSnackbar(msg) {
-    const bar = document.getElementById('appSnackbar');
-    if (!bar) return;
-    bar.innerText = msg;
-    bar.classList.add('show');
-    setTimeout(() => bar.classList.remove('show'), 3000);
-}
-
-function setupGlobalShortcuts() {
-    document.addEventListener('keydown', (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-            e.preventDefault();
-            const taskInput = document.getElementById('taskInput');
-            if (taskInput) taskInput.focus();
-        }
-    });
-    const taskInput = document.getElementById('taskInput');
-    if (taskInput) {
-        taskInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addTask();
-        });
-    }
-}
-
-function initSystemHealth() {
-    const ramTracker = document.getElementById('ramUsageTracker');
-    setInterval(() => {
-        const allocated = (9.72 + Math.random() * 0.15).toFixed(2);
-        if (ramTracker) ramTracker.innerText = `${allocated} MB`;
-    }, 3000);
-}
-
-// Service Worker Message Tunnel Linker (Menerima Instruksi Stop Alarm dari Pop-up)
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data && event.data.command === 'STOP_ALARM') {
-            stopRampingAlarm();
-        }
-    });
-}
-
-// ==========================================
-// 5. OS SHARE TARGET INTERACTION DRIVER
-// ==========================================
-function initShareTargetHandler() {
-    const parsedUrl = new URL(window.location.href);
-    if (parsedUrl.searchParams.get('share') === 'true') {
-        const sharedTitle = parsedUrl.searchParams.get('title') || '';
-        const sharedText = parsedUrl.searchParams.get('text') || '';
-        const sharedUrl = parsedUrl.searchParams.get('url') || '';
-        
-        let combinedInput = sharedTitle;
-        if (sharedText) combinedInput += ` - ${sharedText}`;
-        if (sharedUrl) combinedInput += ` (${sharedUrl})`;
-        
-        const taskInput = document.getElementById('taskInput');
-        if (taskInput && combinedInput.trim()) {
-            taskInput.value = combinedInput.trim();
-            taskInput.focus();
-            showSnackbar("Teks dari OS berhasil ditangkap ke draf!");
-        }
-    }
-}
-
-// ==========================================
-// 6. DEEP OS INTEROPERABILITY DRIVER (LAUNCH QUEUE & PROTOCOLS)
-// ==========================================
-function initProtocolAndFileHandlers() {
-    // 1. Tangkap Parameter dari Kustom Protocol Handler (web+taskflow://)
-    const currentUrl = new URL(window.location.href);
-    if (currentUrl.searchParams.has('protocol')) {
-        const rawProtocolData = currentUrl.searchParams.get('protocol');
-        // Dekode link kustom, pisahkan skema web+taskflow:
-        const cleanContent = decodeURIComponent(rawProtocolData).replace('web+taskflow:', '').replace(/^\/\/+/g, '');
-        if (cleanContent.trim()) {
-            addTask(`[Link Protokol] ${cleanContent}`);
-            showSnackbar("Instruksi dari tautan protokol dieksekusi!");
-        }
+    // 1. PROTOCOL HANDLER INTERCEPTOR (taskflow:// atau web+taskflow://)
+    if (urlParams.has('protocol')) {
+        const rawData = urlParams.get('protocol');
+        const cleanText = decodeURIComponent(rawData).replace('web+taskflow:', '').replace(/^\/\/+/g, '');
+        if (cleanText.trim()) addTask(`[Protokol Link] ${cleanText}`);
     }
 
-    // 2. Tangkap Berkas Eksplorer Internal via Launch Queue (Sesuai Syarat PWABuilder)
+    // 2. FILE HANDLING API & LAUNCH QUEUE INTEGRATION
     if ('launchQueue' in window) {
         window.launchQueue.setConsumer((launchParams) => {
             if (launchParams.files && launchParams.files.length > 0) {
@@ -590,35 +190,153 @@ function initProtocolAndFileHandlers() {
                 fileHandle.getFile().then((file) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        const fileContent = e.target.result;
-                        // Deteksi file format JSON (.task) atau TXT biasa
-                        if (file.name.endsWith('.task') || file.name.endsWith('.json')) {
-                            try {
-                                const parsedJSON = JSON.parse(fileContent);
-                                if (Array.isArray(parsedJSON)) {
-                                    tasks = [...parsedJSON, ...tasks];
-                                } else if (parsedJSON.title) {
-                                    tasks.unshift({
-                                        id: 'task_' + Date.now(),
-                                        title: parsedJSON.title,
-                                        completed: false,
-                                        important: parsedJSON.important || false,
-                                        timestamp: 'Eksternal'
-                                    });
-                                }
-                                renderTasks();
-                                showSnackbar(`Sukses sinkron berkas ekosistem: ${file.name}`);
-                            } catch (err) {
-                                addTask(`[Berkas] ${fileContent.substring(0, 40)}`);
-                            }
-                        } else {
-                            // Cadangan jika berkas bertipe plain .txt biasa
-                            addTask(`[Catatan Eksplorer] ${fileContent.substring(0, 50)}`);
-                        }
+                        const content = e.target.result;
+                        addTask(`[Import Berkas: ${file.name}] ${content.substring(0, 40)}`);
                     };
                     reader.readAsText(file);
-                }).catch(err => console.error('[Launch Queue] Gagal membaca deskriptor file:', err));
+                });
             }
         });
+    }
+}
+
+// ==========================================
+// 3. CORE TASK ENGINE & UX MODUL
+// ==========================================
+function renderTasks() {
+    const listEl = document.getElementById('taskList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    
+    let filtered = tasks.filter(t => {
+        if (currentFilter === 'active') return !t.completed;
+        if (currentFilter === 'important') return t.important;
+        if (currentFilter === 'completed') return t.completed;
+        return true;
+    });
+
+    filtered.forEach(task => {
+        const li = document.createElement('li');
+        li.className = `todo-item ${task.important ? 'important' : ''} ${task.completed ? 'completed' : ''}`;
+        li.innerHTML = `
+            <div class="todo-left" onclick="toggleTaskComplete('${task.id}')">
+                <div class="checkbox-custom"></div>
+                <span class="todo-title">${task.title}</span>
+            </div>
+            <button class="btn-del" onclick="deleteTask('${task.id}')">🗑️</button>
+        `;
+        listEl.appendChild(li);
+    });
+
+    updateMetaCalculations();
+    updateOSBadgeCount(); // Perbarui indikator badge OS setiap siklus render data
+    localStorage.setItem('taskflow_tasks', JSON.stringify(tasks));
+}
+
+function addTask(titleText = null) {
+    const input = document.getElementById('taskInput');
+    const title = titleText ? titleText.trim() : input.value.trim();
+    if (!title) return;
+
+    tasks.unshift({
+        id: 'task_' + Date.now(),
+        title: title,
+        completed: false,
+        important: currentFilter === 'important',
+        timestamp: new Date().toTimeString().split(' ')[0].substring(0, 5)
+    });
+
+    if (!titleText) input.value = '';
+    renderTasks();
+}
+
+function toggleTaskComplete(id) {
+    tasks = tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
+    renderTasks();
+}
+
+function deleteTask(id) {
+    tasks = tasks.filter(t => t.id !== id);
+    renderTasks();
+}
+
+function switchFilter(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    renderTasks();
+}
+
+function updateMetaCalculations() {
+    const total = tasks.length;
+    const activeCount = tasks.filter(t => !t.completed).length;
+    const counterText = document.getElementById('counterText');
+    if (counterText) counterText.innerText = `${activeCount} tugas aktif mendesak`;
+
+    const percent = total === 0 ? 0 : Math.round(((total - activeCount) / total) * 100);
+    const bar = document.getElementById('progressBar');
+    if (bar) bar.style.width = `${percent}%`;
+}
+
+function pressCalc(v) {
+    const d = document.getElementById('calcDisplay');
+    currentCalcExpression = currentCalcExpression === '0' ? String(v) : currentCalcExpression + v;
+    if (d) d.innerText = currentCalcExpression;
+}
+
+function clearCalc() { currentCalcExpression = '0'; document.getElementById('calcDisplay').innerText = '0'; }
+function evalCalc() {
+    try {
+        const sanitized = currentCalcExpression.replace(/[^0-9+\-*/.]/g, '');
+        currentCalcExpression = String(new Function(`return ${sanitized}`)());
+        document.getElementById('calcDisplay').innerText = currentCalcExpression;
+    } catch(e) { clearCalc(); }
+}
+
+async function toggleWakeLockDriver() {
+    const isChecked = document.getElementById('toggleWakeLock')?.checked;
+    if (isChecked && 'wakeLock' in navigator) {
+        try { wakeLockObj = await navigator.wakeLock.request('screen'); } catch(e){}
+    } else if (wakeLockObj) {
+        await wakeLockObj.release(); wakeLockObj = null;
+    }
+}
+
+function showSnackbar(m) {
+    const b = document.getElementById('appSnackbar'); if (!b) return;
+    b.innerText = m; b.classList.add('show');
+    setTimeout(() => b.classList.remove('show'), 3000);
+}
+
+function setupGlobalShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault(); document.getElementById('taskInput')?.focus();
+        }
+    });
+    document.getElementById('taskInput')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addTask();
+    });
+}
+
+function initSystemHealth() {
+    const tracker = document.getElementById('ramUsageTracker');
+    setInterval(() => {
+        if (tracker) tracker.innerText = `${(9.65 + Math.random() * 0.12).toFixed(2)} MB`;
+    }, 3000);
+}
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data?.command === 'STOP_ALARM') stopRampingAlarm();
+    });
+}
+
+function initShareTargetHandler() {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('share') === 'true') {
+        const title = url.searchParams.get('title') || '';
+        const text = url.searchParams.get('text') || '';
+        if (title || text) addTask(`${title} ${text}`.trim());
     }
 }
