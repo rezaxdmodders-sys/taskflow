@@ -1,5 +1,5 @@
 /**
- * TaskFlow Pro — Living OS Core V3.5 Engine
+ * TaskFlow Pro — Living OS Core V3.6 Engine
  * Main Thread, Hardware Interface, & Tab Controller
  */
 
@@ -10,10 +10,10 @@ let activeAlarmTime = null;
 let currentCalcExpression = '0';
 let wakeLockObj = null;
 
-// Web Audio API State
+// Web Audio API & Audio Ramping Nodes State
 let audioCtx = null;
-let alarmInterval = null;
-let rampInterval = null;
+let oscNode = null;
+let gainNode = null;
 
 // Initialization Engine
 window.addEventListener('DOMContentLoaded', () => {
@@ -21,8 +21,9 @@ window.addEventListener('DOMContentLoaded', () => {
     initSystemHealth();
     renderTasks();
     setupGlobalShortcuts();
+    initShareTargetHandler();
     
-    // PWA Service Worker Registration
+    // PWA Service Worker Registration (Jalur Absolut Bebas Eror)
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js')
             .then((reg) => console.log('[App] Service Worker terdaftar! Scope:', reg.scope))
@@ -34,7 +35,7 @@ window.addEventListener('DOMContentLoaded', () => {
         Notification.requestPermission();
     }
     
-    // Unlock Web Audio Context pada interaksi pertama user demi privasi browser
+    // Unlock Web Audio Context pada interaksi pertama user demi kebijakan privasi browser
     document.body.addEventListener('click', () => {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -43,7 +44,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ==========================================
-// 1. TEMPORAL HUB & DRIVER ALARM HAPTIC
+// 1. TEMPORAL HUB & DRIVER ALARM HAPTIC (UPGRADED LINEAR RAMPING)
 // ==========================================
 function initClockEngine() {
     const clockEl = document.getElementById('digitalClock');
@@ -82,9 +83,9 @@ function triggerRampingAlarm() {
     const banner = document.getElementById('alarmAlertBanner');
     if (banner) banner.style.display = 'flex';
     
-    // Haptic Vibration Bridge: Pola Agresif Tugas Mendesak Berulang
+    // Haptic Vibration Bridge: Getaran Intens Terbaca Native di Android
     if ('vibrate' in navigator) {
-        navigator.vibrate([500, 100, 500, 100, 500]);
+        navigator.vibrate([500, 110, 500, 110, 450]);
     }
 
     // PWA Persistent Notification Push Skenario
@@ -104,47 +105,55 @@ function triggerRampingAlarm() {
         });
     }
 
-    // Audio Ramping Synthesizer Logic (Sensory Protection Mode)
+    // Audio Ramping Synthesizer Engine (Anti-Memory Leak & Sensory Protection)
     if (audioCtx) {
         if (audioCtx.state === 'suspended') audioCtx.resume();
         
         const isHardMode = document.getElementById('toggleHardMode').checked;
-        let targetFreq = isHardMode ? 660 : 440; // Jika hardmode aktif, nada awal lebih tinggi
-        let currentVol = 0.05;
+        let baseFreq = isHardMode ? 660 : 440; 
 
-        alarmInterval = setInterval(() => {
-            let osc = audioCtx.createOscillator();
-            let gainNode = audioCtx.createGain();
-            
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(targetFreq, audioCtx.currentTime);
-            
-            gainNode.gain.setValueAtTime(currentVol, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-            
-            osc.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.4);
-        }, 600);
+        // Buat Node Audio Baru untuk Efek Linear Ramping
+        oscNode = audioCtx.createOscillator();
+        gainNode = audioCtx.createGain();
 
-        rampInterval = setInterval(() => {
-            if (currentVol < 0.6) currentVol += 0.08;
-            if (targetFreq < 880) targetFreq += 50;
-        }, 4000);
+        oscNode.type = 'sine';
+        oscNode.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+        oscNode.frequency.linearRampToValueAtTime(baseFreq + 440, audioCtx.currentTime + 10); // Frekuensi meninggi bertahap
+
+        // LOGIKA RAMPING VOLUME: Mulai dari senyap (0) naik halus ke volume penuh (0.8) dalam waktu 8 detik
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 8);
+
+        oscNode.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        oscNode.start();
     }
 }
 
 function stopRampingAlarm() {
-    clearInterval(alarmInterval);
-    clearInterval(rampInterval);
+    // Mematikan dan memotong koneksi Audio Node secara bersih dari RAM
+    if (oscNode) {
+        try {
+            oscNode.stop();
+            oscNode.disconnect();
+            oscNode = null;
+        } catch (e) {
+            console.log('[Hardware Sync] Audio sudah mati atau gagal dihentikan.');
+        }
+    }
+
     if ('vibrate' in navigator) navigator.vibrate(0);
     
-    document.getElementById('alarmAlertBanner').style.display = 'none';
+    const banner = document.getElementById('alarmAlertBanner');
+    if (banner) banner.style.display = 'none';
+
     const statusText = document.getElementById('alarmStatusText');
-    statusText.innerText = "Tidak ada alarm aktif";
-    statusText.style.color = 'var(--text-secondary)';
+    if (statusText) {
+        statusText.innerText = "Tidak ada alarm aktif";
+        statusText.style.color = 'var(--text-secondary)';
+    }
+    
     activeAlarmTime = null;
     showSnackbar("Alarm berhasil dimatikan.");
 }
@@ -196,6 +205,7 @@ function insertCalcToInput() {
 function renderTasks() {
     const listEl = document.getElementById('taskList');
     const emptyStateEl = document.getElementById('emptyState');
+    if (!listEl) return;
     listEl.innerHTML = '';
     
     let filteredTasks = tasks.filter(t => {
@@ -205,7 +215,7 @@ function renderTasks() {
         return true;
     });
 
-    emptyStateEl.style.display = filteredTasks.length === 0 ? 'block' : 'none';
+    if (emptyStateEl) emptyStateEl.style.display = filteredTasks.length === 0 ? 'block' : 'none';
 
     filteredTasks.forEach(task => {
         const li = document.createElement('li');
@@ -244,8 +254,10 @@ function addTask() {
     
     if (!title) {
         const wrapper = document.querySelector('.input-group');
-        wrapper.style.animation = 'shake 0.3s ease';
-        setTimeout(() => wrapper.style.animation = '', 300);
+        if (wrapper) {
+            wrapper.style.animation = 'shake 0.3s ease';
+            setTimeout(() => wrapper.style.animation = '', 300);
+        }
         return;
     }
 
@@ -311,6 +323,9 @@ function saveInlineEdit(id, newTitle) {
     renderTasks();
 }
 
+// ==========================================
+// 4. CONTROL CENTER ADVANCED 3-TAB LOGIC
+// ==========================================
 function switchFilter(filter, buttonElement) {
     currentFilter = filter;
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -323,14 +338,14 @@ function updateMetaCalculations() {
     const completedCount = tasks.filter(t => t.completed).length;
     const activeCount = total - completedCount;
     
-    document.getElementById('counterText').innerText = `${activeCount} tugas aktif mendesak`;
+    const counterText = document.getElementById('counterText');
+    if (counterText) counterText.innerText = `${activeCount} tugas aktif mendesak`;
+    
     const percent = total === 0 ? 0 : Math.round((completedCount / total) * 100);
-    document.getElementById('progressBar').style.width = `${percent}%`;
+    const progressBar = document.getElementById('progressBar');
+    if (progressBar) progressBar.style.width = `${percent}%`;
 }
 
-// ==========================================
-// 4. CONTROL CENTER ADVANCED 3-TAB LOGIC
-// ==========================================
 function switchSettingsTab(tabId, buttonEl) {
     document.querySelectorAll('.settings-nav-tab').forEach(btn => btn.classList.remove('active-tab'));
     document.querySelectorAll('.settings-pane').forEach(pane => pane.classList.remove('active-pane'));
@@ -340,7 +355,7 @@ function switchSettingsTab(tabId, buttonEl) {
 }
 
 function triggerTestNotification() {
-    showSnackbar("Mengunci target... Tes notifikasi dikirim 5 detik lagi.");
+    showSnackbar("Mengunci target... Tes notifikasi dikirim.");
     setTimeout(() => {
         if ('serviceWorker' in navigator && Notification.permission === 'granted') {
             navigator.serviceWorker.ready.then((registration) => {
@@ -421,7 +436,7 @@ function toggleHelpDrawer() {
     const backdrop = document.getElementById('helpBackdrop');
     const isOpen = drawer.classList.contains('open');
     drawer.classList.toggle('open', !isOpen);
-    backdrop.style.display = isOpen ? 'none' : 'block';
+    if (backdrop) backdrop.style.display = isOpen ? 'none' : 'block';
 }
 
 function toggleAccordion(button) {
@@ -429,11 +444,12 @@ function toggleAccordion(button) {
     const ind = button.querySelector('span');
     const isBlock = content.style.display === 'block';
     content.style.display = isBlock ? 'none' : 'block';
-    ind.innerText = isBlock ? '+' : '-';
+    if (ind) ind.innerText = isBlock ? '+' : '-';
 }
 
 function showSnackbar(msg) {
     const bar = document.getElementById('appSnackbar');
+    if (!bar) return;
     bar.innerText = msg;
     bar.classList.add('show');
     setTimeout(() => bar.classList.remove('show'), 3000);
@@ -443,12 +459,16 @@ function setupGlobalShortcuts() {
     document.addEventListener('keydown', (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
             e.preventDefault();
-            document.getElementById('taskInput').focus();
+            const taskInput = document.getElementById('taskInput');
+            if (taskInput) taskInput.focus();
         }
     });
-    document.getElementById('taskInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addTask();
-    });
+    const taskInput = document.getElementById('taskInput');
+    if (taskInput) {
+        taskInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addTask();
+        });
+    }
 }
 
 function initSystemHealth() {
@@ -459,11 +479,34 @@ function initSystemHealth() {
     }, 3000);
 }
 
-// Service Worker Message Tunnel Linker
+// Service Worker Message Tunnel Linker (Menerima Instruksi Stop Alarm dari Pop-up)
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data && event.data.command === 'STOP_ALARM') {
             stopRampingAlarm();
         }
     });
+}
+
+// ==========================================
+// 5. OS SHARE TARGET INTERACTION DRIVER
+// ==========================================
+function initShareTargetHandler() {
+    const parsedUrl = new URL(window.location.href);
+    if (parsedUrl.searchParams.get('share') === 'true') {
+        const sharedTitle = parsedUrl.searchParams.get('title') || '';
+        const sharedText = parsedUrl.searchParams.get('text') || '';
+        const sharedUrl = parsedUrl.searchParams.get('url') || '';
+        
+        let combinedInput = sharedTitle;
+        if (sharedText) combinedInput += ` - ${sharedText}`;
+        if (sharedUrl) combinedInput += ` (${sharedUrl})`;
+        
+        const taskInput = document.getElementById('taskInput');
+        if (taskInput && combinedInput.trim()) {
+            taskInput.value = combinedInput.trim();
+            taskInput.focus();
+            showSnackbar("Teks dari OS berhasil ditangkap ke draf!");
+        }
+    }
 }
